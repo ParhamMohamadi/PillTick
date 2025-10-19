@@ -23,13 +23,17 @@ async function connect() {
     const filters = [];
     if (NAME_PREFIX) filters.push({ namePrefix: NAME_PREFIX });
     // At least one of filters or acceptAllDevices is required
-    const deviceOptions = filters.length
-      ? { filters, optionalServices: [SERVICE_UUID] }
-      : { acceptAllDevices: true, optionalServices: [SERVICE_UUID] };
+    // const deviceOptions = filters.length
+    //   ? { filters, optionalServices: [SERVICE_UUID] }
+    //   : { acceptAllDevices: true, optionalServices: [SERVICE_UUID] };
 
-    device = await navigator.bluetooth.requestDevice(deviceOptions);
+    // device = await navigator.bluetooth.requestDevice(deviceOptions);
 
-    device.addEventListener('gattserverdisconnected', onDisconnected);
+    // device.addEventListener('gattserverdisconnected', onDisconnected);
+
+    const deviceOptions = { acceptAllDevices: true, optionalServices: [SERVICE_UUID] };
+    const device = await navigator.bluetooth.requestDevice(deviceOptions);
+
 
     setState('connecting...');
     server = await device.gatt.connect();
