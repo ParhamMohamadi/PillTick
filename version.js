@@ -1,2 +1,2 @@
 // Global version info — update this value only!
-window.APP_VERSION = 'Ver:0.4';
+window.APP_VERSION = 'Ver:0.2';

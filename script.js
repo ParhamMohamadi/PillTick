@@ -5,7 +5,7 @@ function log(msg){ const a=$('log'); a.value += msg + '\n'; a.scrollTop = a.scro
 console.log('PillTick version:', APP_VERSION);
 $('versionLabel')?.textContent = APP_VERSION;
 
-// Catch uncaught JS errors so you’ll see them in the console box
+// Show JS errors in the in-page console
 window.addEventListener('error', (e) => log('JS ERROR: ' + (e.message || e)));
 window.addEventListener('unhandledrejection', (e) => log('PROMISE REJECTION: ' + (e.reason?.message || e.reason || e)));
 
@@ -31,7 +31,6 @@ function diagnostics(){
   const bleOK = 'bluetooth' in navigator;
   $('diagBle').textContent = bleOK ? 'available' : 'not available';
   if (!bleOK) $('bleWarning').style.display = '';
-  // LocalStorage test
   try { localStorage.setItem('_pilltick_test','1'); localStorage.removeItem('_pilltick_test'); $('diagLs').textContent='OK'; }
   catch { $('diagLs').textContent='blocked'; }
   $('diagSw').textContent = 'serviceWorker' in navigator ? 'supported' : 'not supported';

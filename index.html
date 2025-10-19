@@ -31,7 +31,7 @@
       <button id="btnSync" class="secondary" disabled>Sync to Device</button>
     </div>
     <p class="muted small">Reminders are saved on your phone. When connected, press “Sync to Device”.</p>
-    <div id="bleWarning" class="warn" style="display:none;">Web Bluetooth not available on this browser/device. You can still add reminders; BLE will work on Android Chrome or desktop Chrome/Edge.</div>
+    <div id="bleWarning" class="warn" style="display:none;">Web Bluetooth not available on this browser/device. You can still add reminders; BLE works on Android Chrome or desktop Chrome/Edge.</div>
   </div>
 
   <!-- Next dose -->
@@ -97,6 +97,7 @@
   </div>
 
   <script src="./script.js"></script>
+
   <script>
     // Version label
     if (window.APP_VERSION) document.getElementById('versionLabel').textContent = window.APP_VERSION;
@@ -106,56 +107,55 @@
       const url = `./service-worker.js?v=${encodeURIComponent(window.APP_VERSION || '0')}`;
       navigator.serviceWorker.register(url).catch(() => {});
     }
-  </script>
-  <script>
-  // ---- Auto-update flow ----
-  async function checkForUpdate() {
-    try {
-      // 1) Ask SW to check for a new version
-      const reg = await navigator.serviceWorker.getRegistration();
-      if (reg) {
-        await reg.update();
-        // If a new worker is waiting, tell it to activate now
-        if (reg.waiting) {
-          reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+
+    // ---- Safe auto-update (no loops) ----
+    const CURRENT_VERSION = (window.APP_VERSION || '').trim();
+    let wantReloadForVersion = null;
+
+    async function checkForUpdate() {
+      try {
+        const reg = await navigator.serviceWorker.getRegistration();
+        if (reg) await reg.update();
+      } catch {}
+
+      try {
+        const res = await fetch('./version.js?ts=' + Date.now(), { cache: 'no-store' });
+        const text = await res.text();
+        const m = text.match(/APP_VERSION\s*=\s*'([^']+)'/);
+        const latest = (m && m[1]) ? m[1].trim() : null;
+
+        if (latest && latest !== CURRENT_VERSION && wantReloadForVersion !== latest) {
+          wantReloadForVersion = latest;
+          try {
+            const reg = await navigator.serviceWorker.getRegistration();
+            if (reg?.waiting) {
+              reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+              // reload will happen on controllerchange below
+            } else {
+              location.reload();
+            }
+          } catch {
+            location.reload();
+          }
         }
-      }
-    } catch {}
-
-    try {
-      // 2) Compare version.js with no-cache fetch
-      const res = await fetch('./version.js?ts=' + Date.now(), { cache: 'no-store' });
-      const text = await res.text();
-      const match = text.match(/APP_VERSION\s*=\s*'([^']+)'/);
-      const latest = match && match[1];
-      const current = (window.APP_VERSION || '').trim();
-      if (latest && current && latest !== current) {
-        // Force a reload to pick up the new files
-        location.reload();
-      }
-    } catch (e) {
-      // Silent: offline etc.
+      } catch {}
     }
-  }
 
-  // Run on load, when app returns to foreground, and every 60s
-  window.addEventListener('load', checkForUpdate);
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') checkForUpdate();
-  });
-  setInterval(checkForUpdate, 60000);
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (wantReloadForVersion) {
+          const v = wantReloadForVersion;
+          wantReloadForVersion = null;
+          location.reload();
+        }
+      });
+    }
 
-  // If the SW takes control (new worker), reload once
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      // Avoid infinite loops
-      if (!window.__reloadedForUpdate__) {
-        window.__reloadedForUpdate__ = true;
-        location.reload();
-      }
+    window.addEventListener('load', checkForUpdate);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') checkForUpdate();
     });
-  }
-</script>
-
+    setInterval(checkForUpdate, 60000);
+  </script>
 </body>
 </html>
