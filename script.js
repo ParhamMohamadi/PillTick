@@ -3,7 +3,7 @@ const SERVICE_UUID       = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
 const RX_CHAR_UUID       = '6e400002-b5a3-f393-e0a9-e50e24dcca9e'; // Write
 const TX_CHAR_UUID       = '6e400003-b5a3-f393-e0a9-e50e24dcca9e'; // Notify
 // Optionally, filter by device name prefix to narrow the chooser:
-const NAME_PREFIX        = 'ESP32'; // change to your advertised name, or set to null
+const NAME_PREFIX        = null; // change to your advertised name, or set to null
 
 let device, server, service, rxChar, txChar;
 const enc = new TextEncoder();
