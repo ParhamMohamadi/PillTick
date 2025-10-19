@@ -3,41 +3,96 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ESP32-C6 Web Bluetooth Console</title>
+  <title>PillTick – Pill Reminder + BLE</title>
 
-  <!-- PWA bits -->
   <link rel="manifest" href="./manifest.json" />
   <meta name="theme-color" content="#2563eb" />
 
-  <!-- Styles -->
   <link rel="stylesheet" href="./styles.css" />
+  <style>
+    /* Optional light “card” styling (keeps your existing CSS intact) */
+    .card { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:14px; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+    .muted { color:#6b7280; }
+    .section-title { margin: 6px 0 8px; font-weight: 600; }
+    .tag { display:inline-block; padding:2px 8px; border-radius:999px; background:#eff6ff; color:#1e40af; font-size:.85rem; }
+    .list { list-style:none; padding:0; margin:0; }
+    .list li { padding:10px 0; border-bottom:1px solid #f1f5f9; display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .list li:last-child { border-bottom:none; }
+    .days { display:flex; flex-wrap:wrap; gap:6px; }
+    .days label { display:flex; align-items:center; gap:6px; padding:6px 10px; border:1px solid #cbd5e1; border-radius:8px; background:#fff; }
+    .danger { background:#ef4444 !important; }
+    .secondary { background:#0ea5e9 !important; }
+    .pillname { font-weight:600; }
+    .small { font-size:.9rem; }
+  </style>
 </head>
 <body>
-  <h1>ESP32-C6 Web Bluetooth Console</h1>
+  <h1>PillTick</h1>
 
-  <div id="status">
+  <!-- Connection status + controls -->
+  <div id="status" class="card">
     Status: <strong id="state">disconnected</strong>
+    <div class="row" style="margin-top:10px">
+      <button id="btnConnect">Connect</button>
+      <button id="btnDisconnect" disabled>Disconnect</button>
+      <button id="btnFullscreen" title="Enter fullscreen">Fullscreen</button>
+      <button id="btnSync" class="secondary" disabled>Sync to Device</button>
+    </div>
+    <p class="muted small">Tip: you can use the app offline; reminders are saved on your phone. When you connect, press “Sync to Device”.</p>
   </div>
 
-  <div class="row">
-    <button id="btnConnect">Connect</button>
-    <button id="btnDisconnect" disabled>Disconnect</button>
-    <button id="btnFullscreen" title="Enter fullscreen">Fullscreen</button>
+  <!-- Next dose -->
+  <div class="card" style="margin-top:14px">
+    <div class="section-title">Next dose</div>
+    <div style="display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;">
+      <div id="nextDoseText" class="pillname">—</div>
+      <span class="tag" id="countdown">—</span>
+    </div>
   </div>
 
-  <div class="row">
-    <textarea id="log" class="mono" readonly placeholder="Incoming data will appear here..."></textarea>
+  <!-- Add reminder -->
+  <div class="card" style="margin-top:14px">
+    <div class="section-title">Add reminder</div>
+    <div class="row">
+      <input id="remLabel" type="text" placeholder="Medicine name (e.g., Vitamin D)" />
+      <input id="remTime" type="time" />
+      <select id="remRepeat">
+        <option value="daily" selected>Daily</option>
+        <option value="custom">Specific days</option>
+      </select>
+      <button id="btnAdd">Add</button>
+    </div>
+
+    <div id="customDays" class="days" style="display:none;">
+      <!-- 0=Sun ... 6=Sat (JS Date convention) -->
+      <label><input type="checkbox" value="1" checked>Mon</label>
+      <label><input type="checkbox" value="2" checked>Tue</label>
+      <label><input type="checkbox" value="3" checked>Wed</label>
+      <label><input type="checkbox" value="4" checked>Thu</label>
+      <label><input type="checkbox" value="5" checked>Fri</label>
+      <label><input type="checkbox" value="6">Sat</label>
+      <label><input type="checkbox" value="0">Sun</label>
+    </div>
   </div>
 
-  <div class="row">
-    <input id="outgoing" class="mono" type="text" placeholder="Type a command..." />
-    <button id="btnSend" disabled>Send</button>
+  <!-- Reminders list -->
+  <div class="card" style="margin-top:14px">
+    <div class="section-title">Your reminders</div>
+    <ul id="reminderList" class="list"></ul>
+    <div class="muted small" id="emptyHint" style="display:none;">No reminders yet. Add one above.</div>
   </div>
 
-  <!-- Main logic -->
+  <!-- Log console (keep your BLE console for debugging) -->
+  <div class="card" style="margin-top:14px">
+    <div class="section-title">Console</div>
+    <textarea id="log" class="mono" readonly placeholder="BLE messages will appear here..."></textarea>
+    <div class="row">
+      <input id="outgoing" class="mono" type="text" placeholder="Send raw command..." />
+      <button id="btnSend" disabled>Send</button>
+    </div>
+  </div>
+
   <script src="./script.js"></script>
-
-  <!-- Register Service Worker for PWA installability -->
   <script>
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("./service-worker.js").catch(() => {});
