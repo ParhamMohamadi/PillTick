@@ -1,39 +1,77 @@
-// ==== Configure your UUIDs here (NUS by default) ====
-const SERVICE_UUID       = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
-const RX_CHAR_UUID       = '6e400002-b5a3-f393-e0a9-e50e24dcca9e'; // Write
-const TX_CHAR_UUID       = '6e400003-b5a3-f393-e0a9-e50e24dcca9e'; // Notify
-// Optionally, filter by device name prefix to narrow the chooser:
-const NAME_PREFIX        = null; // change to your advertised name, or set to null
+// ========== BLE CONFIG =============
+const SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e'; // Nordic UART Service (example)
+const RX_CHAR_UUID = '6e400002-b5a3-f393-e0a9-e50e24dcca9e'; // Write
+const TX_CHAR_UUID = '6e400003-b5a3-f393-e0a9-e50e24dcca9e'; // Notify
 
+// If you know your device name prefix, set it here; otherwise leave null
+const NAME_PREFIX = null;
+
+// ========== STATE =============
 let device, server, service, rxChar, txChar;
 const enc = new TextEncoder();
 const dec = new TextDecoder();
 
-const $ = (id) => document.getElementById(id);
-const setState = (s) => ($('state').textContent = s);
-const log = (msg) => {
+// Wake Lock handle
+let wakeLock = null;
+
+// ========== HELPERS =============
+const $ = id => document.getElementById(id);
+const setState = s => ($('state').textContent = s);
+const log = msg => {
   const area = $('log');
   area.value += msg + '\n';
   area.scrollTop = area.scrollHeight;
 };
 
+// Keep screen awake (Android/Chrome)
+async function keepScreenAwake() {
+  try {
+    if ('wakeLock' in navigator) {
+      wakeLock = await navigator.wakeLock.request('screen');
+      // Re-acquire if page becomes visible again
+      document.addEventListener('visibilitychange', async () => {
+        if (document.visibilityState === 'visible' && !wakeLock) {
+          try { wakeLock = await navigator.wakeLock.request('screen'); } catch {}
+        }
+      });
+    }
+  } catch {
+    // ignore
+  }
+}
+
+// Release wake lock on disconnect
+async function releaseWakeLock() {
+  try {
+    if (wakeLock) { await wakeLock.release(); }
+  } catch {}
+  wakeLock = null;
+}
+
+// Enter fullscreen (requires user gesture)
+async function goFullscreen() {
+  const el = document.documentElement;
+  try {
+    if (el.requestFullscreen) await el.requestFullscreen();
+    else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
+  } catch {}
+}
+
+// ========== BLE FLOW =============
 async function connect() {
   try {
     setState('requesting device...');
-    const filters = [];
-    if (NAME_PREFIX) filters.push({ namePrefix: NAME_PREFIX });
-    // At least one of filters or acceptAllDevices is required
-    // const deviceOptions = filters.length
-    //   ? { filters, optionalServices: [SERVICE_UUID] }
-    //   : { acceptAllDevices: true, optionalServices: [SERVICE_UUID] };
 
-    // device = await navigator.bluetooth.requestDevice(deviceOptions);
+    let deviceOptions;
+    if (NAME_PREFIX) {
+      deviceOptions = { filters: [{ namePrefix: NAME_PREFIX }], optionalServices: [SERVICE_UUID] };
+    } else {
+      // Broadest chooser: show all devices, but still grant us access to our service later
+      deviceOptions = { acceptAllDevices: true, optionalServices: [SERVICE_UUID] };
+    }
 
-    // device.addEventListener('gattserverdisconnected', onDisconnected);
-
-    const deviceOptions = { acceptAllDevices: true, optionalServices: [SERVICE_UUID] };
-    const device = await navigator.bluetooth.requestDevice(deviceOptions);
-
+    device = await navigator.bluetooth.requestDevice(deviceOptions);
+    device.addEventListener('gattserverdisconnected', onDisconnected);
 
     setState('connecting...');
     server = await device.gatt.connect();
@@ -42,24 +80,23 @@ async function connect() {
     service = await server.getPrimaryService(SERVICE_UUID);
 
     setState('getting characteristics...');
-    // RX: write from browser to ESP32
     rxChar = await service.getCharacteristic(RX_CHAR_UUID);
-    // TX: notifications from ESP32 to browser
     txChar = await service.getCharacteristic(TX_CHAR_UUID);
 
-    setState('subscribing to notifications...');
+    setState('subscribing...');
     await txChar.startNotifications();
     txChar.addEventListener('characteristicvaluechanged', (ev) => {
-      const value = ev.target.value;
-      // Convert DataView to string (assuming UTF-8 text)
-      const str = dec.decode(value.buffer);
-      log(`ESP32 → ${str}`);
+      const dv = ev.target.value; // DataView
+      log(`ESP32 → ${dec.decode(dv.buffer)}`);
     });
 
     $('btnDisconnect').disabled = false;
     $('btnSend').disabled = false;
     setState('connected');
     log('✔ Connected. Listening for notifications.');
+
+    // Keep screen awake once connected
+    keepScreenAwake();
   } catch (err) {
     console.error(err);
     log(`⚠️ ${err.message || err}`);
@@ -71,8 +108,7 @@ async function sendLine() {
   const text = $('outgoing').value;
   if (!text || !rxChar) return;
   try {
-    // Append newline if your ESP32 firmware expects it
-    const bytes = enc.encode(text + '\n');
+    const bytes = enc.encode(text + '\n'); // append newline if your firmware expects it
     await rxChar.writeValue(bytes);
     log(`You → ${text}`);
     $('outgoing').value = '';
@@ -87,6 +123,7 @@ function onDisconnected() {
   $('btnDisconnect').disabled = true;
   $('btnSend').disabled = true;
   log('ℹ️ Device disconnected.');
+  releaseWakeLock();
 }
 
 async function disconnect() {
@@ -101,6 +138,7 @@ async function disconnect() {
   }
 }
 
+// ========== INIT UI =============
 function init() {
   if (!('bluetooth' in navigator)) {
     log('❌ Web Bluetooth not supported in this browser.');
@@ -113,6 +151,9 @@ function init() {
   $('outgoing').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') { e.preventDefault(); sendLine(); }
   });
-  log('Ready. Click “Connect”.');
+  $('btnFullscreen').addEventListener('click', goFullscreen);
+
+  log('Ready. Tap “Connect”. (Requires HTTPS on Android)');
 }
+
 init();

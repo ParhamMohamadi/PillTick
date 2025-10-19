@@ -5,10 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>ESP32-C6 Web Bluetooth Console</title>
 
-  <!-- ✅ Link your CSS file -->
+  <!-- PWA bits -->
+  <link rel="manifest" href="./manifest.json" />
+  <meta name="theme-color" content="#2563eb" />
+
+  <!-- Styles -->
   <link rel="stylesheet" href="./styles.css" />
 </head>
-
 <body>
   <h1>ESP32-C6 Web Bluetooth Console</h1>
 
@@ -19,6 +22,7 @@
   <div class="row">
     <button id="btnConnect">Connect</button>
     <button id="btnDisconnect" disabled>Disconnect</button>
+    <button id="btnFullscreen" title="Enter fullscreen">Fullscreen</button>
   </div>
 
   <div class="row">
@@ -30,7 +34,14 @@
     <button id="btnSend" disabled>Send</button>
   </div>
 
-  <!-- ✅ Link your Bluetooth logic -->
+  <!-- Main logic -->
   <script src="./script.js"></script>
+
+  <!-- Register Service Worker for PWA installability -->
+  <script>
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("./service-worker.js").catch(() => {});
+    }
+  </script>
 </body>
 </html>

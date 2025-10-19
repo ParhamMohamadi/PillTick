@@ -1,6 +1,4 @@
-/* ==============
-   General layout
-   ============== */
+/* General layout */
 body {
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   margin: 0;
@@ -29,9 +27,7 @@ h1 {
   font-weight: 500;
   margin-bottom: 16px;
 }
-#state {
-  color: #2563eb;
-}
+#state { color: #2563eb; }
 
 /* Buttons */
 button {
@@ -44,16 +40,9 @@ button {
   cursor: pointer;
   transition: background 0.2s, transform 0.1s;
 }
-button:hover {
-  background-color: #1e40af;
-}
-button:disabled {
-  background-color: #93c5fd;
-  cursor: not-allowed;
-}
-button:active {
-  transform: scale(0.97);
-}
+button:hover { background-color: #1e40af; }
+button:disabled { background-color: #93c5fd; cursor: not-allowed; }
+button:active { transform: scale(0.97); }
 
 /* Layout helpers */
 .row {
@@ -63,7 +52,7 @@ button:active {
   gap: 10px;
 }
 
-/* Text input + send button */
+/* Inputs */
 input[type="text"] {
   flex: 1;
   padding: 10px;
@@ -73,7 +62,7 @@ input[type="text"] {
   outline-color: #2563eb;
 }
 
-/* Textarea log */
+/* Log */
 textarea {
   width: 100%;
   height: 200px;
@@ -85,15 +74,9 @@ textarea {
   background: #f1f5f9;
 }
 
-/* Responsive tweaks for phones */
+/* Responsive */
 @media (max-width: 600px) {
-  body {
-    padding: 12px;
-  }
-  h1 {
-    font-size: 1.5rem;
-  }
-  button {
-    flex: 1;
-  }
+  body { padding: 12px; }
+  h1 { font-size: 1.5rem; }
+  button { flex: 1; }
 }
