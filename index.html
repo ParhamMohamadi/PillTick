@@ -8,13 +8,13 @@
   <link rel="manifest" href="./manifest.json" />
   <meta name="theme-color" content="#2563eb" />
 
-  <!-- Load version variable first -->
+  <!-- Version variable first -->
   <script src="./version.js"></script>
 
   <link rel="stylesheet" href="./styles.css" />
-
   <style>
     .version { text-align:center; margin:6px 0 0; color:#64748b; font-size:.9rem; }
+    .warn { background:#fef3c7; border:1px solid #f59e0b; color:#7c2d12; padding:8px 10px; border-radius:8px; }
   </style>
 </head>
 <body>
@@ -31,6 +31,7 @@
       <button id="btnSync" class="secondary" disabled>Sync to Device</button>
     </div>
     <p class="muted small">Reminders are saved on your phone. When connected, press “Sync to Device”.</p>
+    <div id="bleWarning" class="warn" style="display:none;">Web Bluetooth not available on this browser/device. You can still add reminders; BLE will work on Android Chrome or desktop Chrome/Edge.</div>
   </div>
 
   <!-- Next dose -->
@@ -73,10 +74,22 @@
     <div class="muted small" id="emptyHint" style="display:none;">No reminders yet. Add one above.</div>
   </div>
 
+  <!-- Diagnostics -->
+  <div class="card" style="margin-top:14px">
+    <div class="section-title">Diagnostics</div>
+    <div class="small">
+      <div>Browser: <span id="diagBrowser">—</span></div>
+      <div>HTTPS: <span id="diagHttps">—</span></div>
+      <div>Web Bluetooth: <span id="diagBle">—</span></div>
+      <div>LocalStorage: <span id="diagLs">—</span></div>
+      <div>Service Worker: <span id="diagSw">—</span></div>
+    </div>
+  </div>
+
   <!-- Console -->
   <div class="card" style="margin-top:14px">
     <div class="section-title">Console</div>
-    <textarea id="log" class="mono" readonly placeholder="BLE messages will appear here..."></textarea>
+    <textarea id="log" class="mono" readonly placeholder="Messages & errors will appear here..."></textarea>
     <div class="row">
       <input id="outgoing" class="mono" type="text" placeholder="Send raw command..." />
       <button id="btnSend" disabled>Send</button>
@@ -85,12 +98,10 @@
 
   <script src="./script.js"></script>
   <script>
-    // Update visible version label
-    if (window.APP_VERSION) {
-      document.getElementById('versionLabel').textContent = window.APP_VERSION;
-    }
+    // Version label
+    if (window.APP_VERSION) document.getElementById('versionLabel').textContent = window.APP_VERSION;
 
-    // Register service worker with version query for cache busting
+    // Register service worker with version query
     if ('serviceWorker' in navigator) {
       const url = `./service-worker.js?v=${encodeURIComponent(window.APP_VERSION || '0')}`;
       navigator.serviceWorker.register(url).catch(() => {});
