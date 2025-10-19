@@ -107,5 +107,55 @@
       navigator.serviceWorker.register(url).catch(() => {});
     }
   </script>
+  <script>
+  // ---- Auto-update flow ----
+  async function checkForUpdate() {
+    try {
+      // 1) Ask SW to check for a new version
+      const reg = await navigator.serviceWorker.getRegistration();
+      if (reg) {
+        await reg.update();
+        // If a new worker is waiting, tell it to activate now
+        if (reg.waiting) {
+          reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+        }
+      }
+    } catch {}
+
+    try {
+      // 2) Compare version.js with no-cache fetch
+      const res = await fetch('./version.js?ts=' + Date.now(), { cache: 'no-store' });
+      const text = await res.text();
+      const match = text.match(/APP_VERSION\s*=\s*'([^']+)'/);
+      const latest = match && match[1];
+      const current = (window.APP_VERSION || '').trim();
+      if (latest && current && latest !== current) {
+        // Force a reload to pick up the new files
+        location.reload();
+      }
+    } catch (e) {
+      // Silent: offline etc.
+    }
+  }
+
+  // Run on load, when app returns to foreground, and every 60s
+  window.addEventListener('load', checkForUpdate);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') checkForUpdate();
+  });
+  setInterval(checkForUpdate, 60000);
+
+  // If the SW takes control (new worker), reload once
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      // Avoid infinite loops
+      if (!window.__reloadedForUpdate__) {
+        window.__reloadedForUpdate__ = true;
+        location.reload();
+      }
+    });
+  }
+</script>
+
 </body>
 </html>
