@@ -267,6 +267,9 @@ function connect(){
         txChar.addEventListener('characteristicvaluechanged', function(e){
           var txt = dec.decode(e.target.value.buffer).trim();
           log('ESP32 → ' + txt);
+	if (text === 'TIME?' || text.startsWith('TIME?')) {
+  	sendRaw(`SYNC_TIME ${Math.floor(Date.now()/1000)}`);
+	}
         });
       });
     }).then(function(){
