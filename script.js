@@ -23,9 +23,10 @@ window.addEventListener('unhandledrejection', function(e){
 /***********************
  * BLE CONFIG (NUS)
  ***********************/
-var SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
-var RX_CHAR_UUID = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
-var TX_CHAR_UUID = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
+const SERVICE_UUID = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';
+const RX_CHAR_UUID = 'beb5483e-36e1-4688-b7f5-ea07361b26a8'; // write
+const TX_CHAR_UUID = 'beb5483e-36e1-4688-b7f5-ea07361b26a8'; // same char used for notify
+
 var NAME_PREFIX = null;
 
 var device, server, service, rxChar, txChar;
