@@ -1,113 +1,184 @@
-// ===== Version & basic logger =====
-const APP_VERSION = window.APP_VERSION || 'Ver:unknown';
-const $ = id => document.getElementById(id);
-function log(msg){ const a=$('log'); a.value += msg + '\n'; a.scrollTop = a.scrollHeight; }
-console.log('PillTick version:', APP_VERSION);
-$('versionLabel')?.textContent = APP_VERSION;
+// ===== Version & basic logger (compat) =====
+var APP_VERSION = window.APP_VERSION || 'Ver:unknown';
+function $(id){ return document.getElementById(id); }
+function log(msg){
+  var a = $('log');
+  if (!a) return;
+  a.value += msg + '\n';
+  a.scrollTop = a.scrollHeight;
+}
+try {
+  console.log('PillTick version:', APP_VERSION);
+  var vl = $('versionLabel');
+  if (vl) vl.textContent = APP_VERSION;
+} catch(e){}
 
 // Show JS errors in the in-page console
-window.addEventListener('error', (e) => log('JS ERROR: ' + (e.message || e)));
-window.addEventListener('unhandledrejection', (e) => log('PROMISE REJECTION: ' + (e.reason?.message || e.reason || e)));
+window.addEventListener('error', function(e){ log('JS ERROR: ' + (e.message || e)); });
+window.addEventListener('unhandledrejection', function(e){ 
+  var r = e.reason && (e.reason.message || e.reason) || e;
+  log('PROMISE REJECTION: ' + r);
+});
 
 /***********************
  * BLE CONFIG (NUS)
  ***********************/
-const SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
-const RX_CHAR_UUID = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
-const TX_CHAR_UUID = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
-const NAME_PREFIX = null;
+var SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+var RX_CHAR_UUID = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
+var TX_CHAR_UUID = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
+var NAME_PREFIX = null;
 
-let device, server, service, rxChar, txChar;
-const enc = new TextEncoder();
-const dec = new TextDecoder();
-let wakeLock = null;
+var device, server, service, rxChar, txChar;
+var enc = new TextEncoder();
+var dec = new TextDecoder();
+var wakeLock = null;
 
 /***********************
  * SUPPORT DIAGNOSTICS
  ***********************/
 function diagnostics(){
-  $('diagBrowser').textContent = navigator.userAgent;
+  var ua = navigator.userAgent || '';
+  $('diagBrowser').textContent = ua;
   $('diagHttps').textContent = (location.protocol === 'https:' || location.hostname === 'localhost') ? 'OK' : 'NOT SECURE';
-  const bleOK = 'bluetooth' in navigator;
+  var bleOK = ('bluetooth' in navigator);
   $('diagBle').textContent = bleOK ? 'available' : 'not available';
-  if (!bleOK) $('bleWarning').style.display = '';
+  if (!bleOK) { var bw = $('bleWarning'); if (bw) bw.style.display = ''; }
   try { localStorage.setItem('_pilltick_test','1'); localStorage.removeItem('_pilltick_test'); $('diagLs').textContent='OK'; }
-  catch { $('diagLs').textContent='blocked'; }
-  $('diagSw').textContent = 'serviceWorker' in navigator ? 'supported' : 'not supported';
+  catch (e){ $('diagLs').textContent='blocked'; }
+  $('diagSw').textContent = ('serviceWorker' in navigator) ? 'supported' : 'not supported';
 }
 
 /***********************
  * UI HELPERS
  ***********************/
-function setState(s){ $('state').textContent = s; }
+function setState(s){ var el = $('state'); if (el) el.textContent = s; }
 
 /***********************
  * WAKE LOCK + FULLSCREEN
  ***********************/
-async function keepScreenAwake(){ try{ if('wakeLock' in navigator){ wakeLock = await navigator.wakeLock.request('screen'); } }catch(e){ log('WakeLock error: '+e.message); } }
-async function releaseWakeLock(){ try{ await wakeLock?.release(); }catch{} wakeLock=null; }
-async function goFullscreen(){ const el=document.documentElement; try{ if(el.requestFullscreen) await el.requestFullscreen(); }catch(e){ log('Fullscreen error: '+e.message); } }
+function keepScreenAwake(){
+  try{
+    if ('wakeLock' in navigator && navigator.wakeLock && navigator.wakeLock.request) {
+      return navigator.wakeLock.request('screen').then(function(wl){ wakeLock = wl; });
+    }
+  }catch(e){ log('WakeLock error: '+e.message); }
+  return Promise.resolve();
+}
+function releaseWakeLock(){
+  try{ if (wakeLock && wakeLock.release) wakeLock.release(); }catch(e){}
+  wakeLock = null;
+}
+function goFullscreen(){
+  var el = document.documentElement;
+  try { if (el.requestFullscreen) el.requestFullscreen(); } catch(e){ log('Fullscreen error: '+e.message); }
+}
 
 /***********************
  * REMINDER STORAGE
  ***********************/
-const STORE_KEY = 'PILL_REMINDERS_V1';
-function loadReminders(){ try{return JSON.parse(localStorage.getItem(STORE_KEY))||[];}catch{return[];} }
+var STORE_KEY = 'PILL_REMINDERS_V1';
+function loadReminders(){ try{ return JSON.parse(localStorage.getItem(STORE_KEY)) || []; }catch(e){ return []; } }
 function saveReminders(list){ localStorage.setItem(STORE_KEY, JSON.stringify(list)); }
-function upsertReminder(rem){ const list=loadReminders(); const i=list.findIndex(r=>r.id===rem.id); if(i>=0) list[i]=rem; else list.push(rem); saveReminders(list); renderReminders(); updateNextDose(); log('Added/updated reminder: '+rem.label+' @ '+rem.time); }
-function deleteReminder(id){ saveReminders(loadReminders().filter(r=>r.id!==id)); renderReminders(); updateNextDose(); log('Deleted reminder '+id); }
+function upsertReminder(rem){
+  var list = loadReminders();
+  var i = -1;
+  for (var k=0;k<list.length;k++){ if (list[k].id === rem.id) { i=k; break; } }
+  if (i>=0) list[i]=rem; else list.push(rem);
+  saveReminders(list);
+  renderReminders();
+  updateNextDose();
+  log('Added/updated reminder: '+rem.label+' @ '+rem.time);
+}
+function deleteReminder(id){
+  var list = loadReminders().filter(function(r){ return r.id !== id; });
+  saveReminders(list);
+  renderReminders();
+  updateNextDose();
+  log('Deleted reminder '+id);
+}
 
 /***********************
  * DATE/TIME HELPERS
  ***********************/
-function pad(n){return (n<10?'0':'')+n;}
-function parseHHMM(hhmm){ const [h,m] = (hhmm||'').split(':').map(Number); return {h: h||0, m: m||0}; }
-function nextOccurrence(rem, now=new Date()){
-  const {h,m} = parseHHMM(rem.time); const mask = rem.daysMask;
-  for (let add=0; add<8; add++){
-    const d = new Date(now);
-    d.setSeconds(0,0); d.setDate(now.getDate()+add); d.setHours(h, m, 0, 0);
-    const wd = d.getDay(); const ok = (mask===0) ? true : ((mask & (1<<wd))!==0);
-    if (!ok) continue; if (d > now) return d;
+function pad(n){ return (n<10?'0':'')+n; }
+function parseHHMM(hhmm){
+  if (!hhmm) return {h:0, m:0};
+  var parts = hhmm.split(':');
+  return { h: parseInt(parts[0]||'0',10), m: parseInt(parts[1]||'0',10) };
+}
+function nextOccurrence(rem, now){
+  now = now || new Date();
+  var t = parseHHMM(rem.time);
+  var mask = rem.daysMask;
+  for (var add=0; add<8; add++){
+    var d = new Date(now.getTime());
+    d.setSeconds(0,0);
+    d.setDate(now.getDate()+add);
+    d.setHours(t.h, t.m, 0, 0);
+    var wd = d.getDay();
+    var ok = (mask===0) ? true : ((mask & (1<<wd)) !== 0);
+    if (!ok) continue;
+    if (d > now) return d;
   }
   return null;
 }
-function computeNextDose(list, now=new Date()){
-  let best=null, bestRem=null;
-  for (const r of list){ const occ = nextOccurrence(r, now); if (!occ) continue; if (!best || occ<best){ best=occ; bestRem=r; } }
-  return {when:best, rem:bestRem};
+function computeNextDose(list, now){
+  now = now || new Date();
+  var best = null, bestRem = null;
+  for (var i=0;i<list.length;i++){
+    var r = list[i];
+    var occ = nextOccurrence(r, now);
+    if (!occ) continue;
+    if (!best || occ < best){ best = occ; bestRem = r; }
+  }
+  return { when: best, rem: bestRem };
 }
 
 /***********************
  * RENDERING
  ***********************/
-function daysMaskToText(mask){ if(mask===0) return 'Daily'; const s=['Sun','Mon','Tue','Wed','Thu','Fri','Sat']; return s.filter((_,i)=>mask&(1<<i)).join(', '); }
+function daysMaskToText(mask){
+  if (mask===0) return 'Daily';
+  var s=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  var out=[], i;
+  for (i=0;i<7;i++){ if (mask & (1<<i)) out.push(s[i]); }
+  return out.join(', ');
+}
 function renderReminders(){
-  const list = loadReminders();
-  const ul = $('reminderList');
+  var list = loadReminders();
+  var ul = $('reminderList');
+  if (!ul) return;
   ul.innerHTML = '';
-  if (list.length === 0){ $('emptyHint').style.display=''; return; }
-  $('emptyHint').style.display='none';
-  list.sort((a,b)=>a.time.localeCompare(b.time));
-  for (const r of list){
-    const li = document.createElement('li');
-    const left = document.createElement('div');
-    left.innerHTML = `<div class="pillname">${r.label} — ${r.time}</div><div class="muted small">${daysMaskToText(r.daysMask)}</div>`;
-    const del = document.createElement('button'); del.className='danger'; del.textContent='Delete'; del.onclick=()=>deleteReminder(r.id);
-    const right = document.createElement('div'); right.appendChild(del);
+  if (list.length === 0){
+    var eh = $('emptyHint'); if (eh) eh.style.display = '';
+    return;
+  }
+  var eh2 = $('emptyHint'); if (eh2) eh2.style.display = 'none';
+  list.sort(function(a,b){ return a.time.localeCompare(b.time); });
+  for (var i=0;i<list.length;i++){
+    var r = list[i];
+    var li = document.createElement('li');
+    var left = document.createElement('div');
+    left.innerHTML = '<div class="pillname">'+r.label+' — '+r.time+'</div><div class="muted small">'+daysMaskToText(r.daysMask)+'</div>';
+    var del = document.createElement('button'); del.className='danger'; del.textContent='Delete';
+    del.onclick = (function(id){ return function(){ deleteReminder(id); }; })(r.id);
+    var right = document.createElement('div'); right.appendChild(del);
     li.appendChild(left); li.appendChild(right); ul.appendChild(li);
   }
 }
 function updateNextDose(){
-  const {when, rem} = computeNextDose(loadReminders());
-  const txt = $('nextDoseText'); const cd = $('countdown');
-  if (!when || !rem){ txt.textContent='No upcoming doses'; cd.textContent='—'; return; }
-  txt.textContent = `${rem.label} at ${when.toDateString()} ${pad(when.getHours())}:${pad(when.getMinutes())}`;
+  var ndt = $('nextDoseText'), cd = $('countdown');
+  if (!ndt || !cd) return;
+  var res = computeNextDose(loadReminders());
+  var when = res.when, rem = res.rem;
+  if (!when || !rem){ ndt.textContent='No upcoming doses'; cd.textContent='—'; return; }
+  ndt.textContent = rem.label + ' at ' + when.toDateString() + ' ' + pad(when.getHours()) + ':' + pad(when.getMinutes());
   function tick(){
-    const now = new Date(); const ms = when - now;
+    var now = new Date();
+    var ms = when - now;
     if (ms <= 0){ cd.textContent = 'now'; return; }
-    const s = Math.floor(ms/1000), m = Math.floor(s/60), h = Math.floor(m/60);
-    cd.textContent = `${pad(h)}:${pad(m%60)}:${pad(s%60)}`;
+    var s = Math.floor(ms/1000), m = Math.floor(s/60), h = Math.floor(m/60);
+    cd.textContent = pad(h)+':'+pad(m%60)+':'+pad(s%60);
     requestAnimationFrame(tick);
   }
   requestAnimationFrame(tick);
@@ -117,22 +188,40 @@ function updateNextDose(){
  * FORM
  ***********************/
 function collectDaysMask(){
-  if ($('remRepeat').value === 'daily') return 0;
-  let mask = 0;
-  [...$('customDays').querySelectorAll('input[type=checkbox]')].forEach(chk => { if (chk.checked) mask |= (1 << Number(chk.value)); });
+  var rep = $('remRepeat');
+  if (!rep || rep.value === 'daily') return 0;
+  var mask = 0;
+  var box = $('customDays');
+  if (!box) return 0;
+  var checks = box.querySelectorAll('input[type=checkbox]');
+  for (var i=0;i<checks.length;i++){
+    var chk = checks[i];
+    if (chk.checked) { mask |= (1 << parseInt(chk.value,10)); }
+  }
   return mask;
 }
 function setupForm(){
-  $('remRepeat').addEventListener('change', ()=>{ $('customDays').style.display = ($('remRepeat').value==='custom') ? '' : 'none'; });
-  $('btnAdd').addEventListener('click', ()=>{
-    const label = $('remLabel').value.trim();
-    const time = $('remTime').value;
-    const daysMask = collectDaysMask();
-    if (!label || !time){ alert('Please enter a name and time.'); return; }
-    const rem = { id: Math.random().toString(36).slice(2,9), label, time, daysMask };
-    $('remLabel').value = '';
-    upsertReminder(rem);
-  });
+  var rep = $('remRepeat');
+  var custom = $('customDays');
+  if (rep && custom){
+    rep.addEventListener('change', function(){
+      custom.style.display = (rep.value === 'custom') ? '' : 'none';
+    });
+  }
+  var addBtn = $('btnAdd');
+  if (addBtn){
+    addBtn.addEventListener('click', function(){
+      var labelEl = $('remLabel');
+      var timeEl  = $('remTime');
+      var label = labelEl ? labelEl.value.trim() : '';
+      var time  = timeEl ? timeEl.value : '';
+      var daysMask = collectDaysMask();
+      if (!label || !time){ alert('Please enter a name and time.'); return; }
+      var rem = { id: Math.random().toString(36).slice(2,9), label: label, time: time, daysMask: daysMask };
+      if (labelEl) labelEl.value = '';
+      upsertReminder(rem);
+    });
+  }
 }
 
 /***********************
@@ -150,46 +239,97 @@ function requireBleOrExplain(){
   return true;
 }
 
-async function connect(){
+function connect(){
   try{
     if (!requireBleOrExplain()) return;
     setState('requesting device…');
-    const opts = NAME_PREFIX
+    var opts = NAME_PREFIX
       ? { filters:[{namePrefix:NAME_PREFIX}], optionalServices:[SERVICE_UUID] }
       : { acceptAllDevices:true, optionalServices:[SERVICE_UUID] };
-    device = await navigator.bluetooth.requestDevice(opts);
-    device.addEventListener('gattserverdisconnected', onDisconnected);
-    setState('connecting…'); server = await device.gatt.connect();
-    setState('getting service…'); service = await server.getPrimaryService(SERVICE_UUID);
-    rxChar = await service.getCharacteristic(RX_CHAR_UUID);
-    txChar = await service.getCharacteristic(TX_CHAR_UUID);
-    await txChar.startNotifications();
-    txChar.addEventListener('characteristicvaluechanged', e => { log('ESP32 → ' + dec.decode(e.target.value.buffer).trim()); });
-    $('btnDisconnect').disabled = false; $('btnSend').disabled = false; $('btnSync').disabled = false;
-    setState('connected'); log('✔ Connected.');
-    await keepScreenAwake();
-    await syncTimeToDevice();
+    navigator.bluetooth.requestDevice(opts).then(function(dev){
+      device = dev;
+      device.addEventListener('gattserverdisconnected', onDisconnected);
+      setState('connecting…');
+      return device.gatt.connect();
+    }).then(function(srv){
+      server = srv;
+      setState('getting service…');
+      return server.getPrimaryService(SERVICE_UUID);
+    }).then(function(svc){
+      service = svc;
+      return Promise.all([
+        service.getCharacteristic(RX_CHAR_UUID).then(function(c){ rxChar=c; }),
+        service.getCharacteristic(TX_CHAR_UUID).then(function(c){ txChar=c; })
+      ]);
+    }).then(function(){
+      return txChar.startNotifications().then(function(){
+        txChar.addEventListener('characteristicvaluechanged', function(e){
+          var txt = dec.decode(e.target.value.buffer).trim();
+          log('ESP32 → ' + txt);
+        });
+      });
+    }).then(function(){
+      $('btnDisconnect').disabled = false;
+      $('btnSend').disabled = false;
+      $('btnSync').disabled = false;
+      setState('connected'); log('✔ Connected.');
+      return keepScreenAwake();
+    }).then(function(){
+      return syncTimeToDevice();
+    }).catch(function(e){
+      log('⚠️ ' + (e.message || e));
+      setState('error');
+    });
   } catch (e){
     log('⚠️ ' + (e.message || e));
     setState('error');
   }
 }
 
-async function sendRaw(line){ if (!rxChar) return; await rxChar.writeValue(enc.encode(line+'\n')); log('You → ' + line); }
-async function syncTimeToDevice(){ await sendRaw(`SYNC_TIME ${Math.floor(Date.now()/1000)}`); }
-async function pushRemindersToDevice(){
+function sendRaw(line){
+  if (!rxChar) return Promise.resolve();
+  return rxChar.writeValue(enc.encode(line+'\n')).then(function(){
+    log('You → ' + line);
+  });
+}
+function syncTimeToDevice(){ return sendRaw('SYNC_TIME ' + Math.floor(Date.now()/1000)); }
+function pushRemindersToDevice(){
   if (!requireBleOrExplain()) return;
-  await sendRaw('CLEAR_REMINDERS');
-  for (const r of loadReminders()){
-    const safe = r.label.replace(/\s+/g,'_');
-    await sendRaw(`ADD_REMINDER ${r.id} ${r.time} ${r.daysMask} ${safe}`);
-  }
-  log('✔ Reminders synced.');
+  sendRaw('CLEAR_REMINDERS').then(function(){
+    var list = loadReminders();
+    var p = Promise.resolve();
+    list.forEach(function(r){
+      var safe = r.label.replace(/\s+/g,'_');
+      p = p.then(function(){ return sendRaw('ADD_REMINDER ' + r.id + ' ' + r.time + ' ' + r.daysMask + ' ' + safe); });
+    });
+    return p.then(function(){ log('✔ Reminders synced.'); });
+  });
 }
 
-function onDisconnected(){ setState('disconnected'); $('btnDisconnect').disabled=true; $('btnSend').disabled=true; $('btnSync').disabled=true; log('ℹ️ Device disconnected.'); releaseWakeLock(); }
-async function disconnect(){ try{ if (txChar){ try{ await txChar.stopNotifications(); }catch{} } if (device?.gatt?.connected) device.gatt.disconnect(); } finally { onDisconnected(); } }
-async function sendLine(){ const t = $('outgoing').value; if (!t) return; await sendRaw(t); $('outgoing').value=''; }
+function onDisconnected(){
+  setState('disconnected');
+  $('btnDisconnect').disabled = true;
+  $('btnSend').disabled = true;
+  $('btnSync').disabled = true;
+  log('ℹ️ Device disconnected.');
+  releaseWakeLock();
+}
+function disconnect(){
+  try{
+    var p = Promise.resolve();
+    if (txChar && txChar.stopNotifications) {
+      p = txChar.stopNotifications().catch(function(){});
+    }
+    p.then(function(){
+      if (device && device.gatt && device.gatt.connected) device.gatt.disconnect();
+    }).finally(onDisconnected);
+  }catch(e){ onDisconnected(); }
+}
+function sendLine(){
+  var t = $('outgoing') ? $('outgoing').value : '';
+  if (!t) return;
+  sendRaw(t).then(function(){ if ($('outgoing')) $('outgoing').value=''; });
+}
 
 /***********************
  * INIT
@@ -198,16 +338,16 @@ function init(){
   diagnostics();
 
   // Buttons
-  $('btnConnect').addEventListener('click', connect);
-  $('btnDisconnect').addEventListener('click', disconnect);
-  $('btnSend').addEventListener('click', sendLine);
-  $('btnSync').addEventListener('click', pushRemindersToDevice);
-  $('btnFullscreen').addEventListener('click', goFullscreen);
-  $('outgoing').addEventListener('keydown', e => { if (e.key==='Enter'){ e.preventDefault(); sendLine(); } });
+  var b1=$('btnConnect'); if (b1) b1.addEventListener('click', connect);
+  var b2=$('btnDisconnect'); if (b2) b2.addEventListener('click', disconnect);
+  var b3=$('btnSend'); if (b3) b3.addEventListener('click', sendLine);
+  var b4=$('btnSync'); if (b4) b4.addEventListener('click', pushRemindersToDevice);
+  var b5=$('btnFullscreen'); if (b5) b5.addEventListener('click', goFullscreen);
+  var out=$('outgoing'); if (out) out.addEventListener('keydown', function(e){ if (e.key==='Enter'){ e.preventDefault(); sendLine(); } });
 
   // Form + list + countdown
   setupForm(); renderReminders(); updateNextDose(); setInterval(updateNextDose, 60000);
 
-  log(`Ready (${APP_VERSION}).`);
+  log('Ready ('+APP_VERSION+').');
 }
 init();

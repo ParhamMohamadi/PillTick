@@ -99,63 +99,71 @@
   <script src="./script.js"></script>
 
   <script>
-    // Version label
-    if (window.APP_VERSION) document.getElementById('versionLabel').textContent = window.APP_VERSION;
+    // Version label (compat-safe)
+    (function(){
+      var v = window.APP_VERSION || '';
+      var el = document.getElementById('versionLabel');
+      if (v && el) el.textContent = v;
+    })();
 
-    // Register service worker with version query
-    if ('serviceWorker' in navigator) {
-      const url = `./service-worker.js?v=${encodeURIComponent(window.APP_VERSION || '0')}`;
-      navigator.serviceWorker.register(url).catch(() => {});
-    }
+    // Register service worker with version query (compat-safe)
+    (function(){
+      if ('serviceWorker' in navigator) {
+        var url = './service-worker.js?v=' + encodeURIComponent(window.APP_VERSION || '0');
+        navigator.serviceWorker.register(url).catch(function(){});
+      }
+    })();
 
     // ---- Safe auto-update (no loops) ----
-    const CURRENT_VERSION = (window.APP_VERSION || '').trim();
-    let wantReloadForVersion = null;
+    (function(){
+      var CURRENT_VERSION = (window.APP_VERSION || '').trim();
+      var wantReloadForVersion = null;
 
-    async function checkForUpdate() {
-      try {
-        const reg = await navigator.serviceWorker.getRegistration();
-        if (reg) await reg.update();
-      } catch {}
-
-      try {
-        const res = await fetch('./version.js?ts=' + Date.now(), { cache: 'no-store' });
-        const text = await res.text();
-        const m = text.match(/APP_VERSION\s*=\s*'([^']+)'/);
-        const latest = (m && m[1]) ? m[1].trim() : null;
-
-        if (latest && latest !== CURRENT_VERSION && wantReloadForVersion !== latest) {
-          wantReloadForVersion = latest;
-          try {
-            const reg = await navigator.serviceWorker.getRegistration();
-            if (reg?.waiting) {
-              reg.waiting.postMessage({ type: 'SKIP_WAITING' });
-              // reload will happen on controllerchange below
-            } else {
-              location.reload();
+      function checkForUpdate() {
+        // ask SW to update
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistration().then(function(reg){
+            if (reg) reg.update();
+          });
+        }
+        // compare version.js
+        fetch('./version.js?ts=' + Date.now(), { cache: 'no-store' })
+          .then(function(res){ return res.text(); })
+          .then(function(text){
+            var m = text.match(/APP_VERSION\s*=\s*'([^']+)'/);
+            var latest = m && m[1] ? m[1].trim() : null;
+            if (latest && latest !== CURRENT_VERSION && wantReloadForVersion !== latest) {
+              wantReloadForVersion = latest;
+              if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.getRegistration().then(function(reg){
+                  if (reg && reg.waiting) {
+                    reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+                  } else {
+                    location.reload();
+                  }
+                }).catch(function(){ location.reload(); });
+              } else {
+                location.reload();
+              }
             }
-          } catch {
+          }).catch(function(){});
+      }
+
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.addEventListener('controllerchange', function(){
+          if (wantReloadForVersion) {
+            wantReloadForVersion = null;
             location.reload();
           }
-        }
-      } catch {}
-    }
+        });
+      }
 
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.addEventListener('controllerchange', () => {
-        if (wantReloadForVersion) {
-          const v = wantReloadForVersion;
-          wantReloadForVersion = null;
-          location.reload();
-        }
+      window.addEventListener('load', checkForUpdate);
+      document.addEventListener('visibilitychange', function(){
+        if (document.visibilityState === 'visible') checkForUpdate();
       });
-    }
-
-    window.addEventListener('load', checkForUpdate);
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') checkForUpdate();
-    });
-    setInterval(checkForUpdate, 60000);
+      setInterval(checkForUpdate, 60000);
+    })();
   </script>
 </body>
 </html>
