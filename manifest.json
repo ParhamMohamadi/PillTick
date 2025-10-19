@@ -1,6 +1,6 @@
 {
-  "name": "ESP32 BLE Console",
-  "short_name": "BLE Console",
+  "name": "PillTick – Pill Reminder + BLE",
+  "short_name": "PillTick",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
