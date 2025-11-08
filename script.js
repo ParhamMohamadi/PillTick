@@ -27,7 +27,7 @@ const SERVICE_UUID = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';
 const RX_CHAR_UUID = 'beb5483e-36e1-4688-b7f5-ea07361b26a8'; // write
 const TX_CHAR_UUID = 'beb5483e-36e1-4688-b7f5-ea07361b26a8'; // same char used for notify
 
-var NAME_PREFIX = null;
+var NAME_PREFIX = 'ESP32';
 
 var device, server, service, rxChar, txChar;
 var enc = new TextEncoder();
@@ -245,7 +245,7 @@ function connect(){
     if (!requireBleOrExplain()) return;
     setState('requesting device…');
     var opts = NAME_PREFIX
-      ? { filters:[{namePrefix:NAME_PREFIX}], optionalServices:[SERVICE_UUID] }
+      ? { filters:[{ name: 'ESP32-PillTick' },{namePrefix:NAME_PREFIX}], optionalServices:[SERVICE_UUID] }
       : { acceptAllDevices:true, optionalServices:[SERVICE_UUID] };
     navigator.bluetooth.requestDevice(opts).then(function(dev){
       device = dev;
